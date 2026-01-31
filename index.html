@@ -75,10 +75,15 @@
             position: absolute;
             background-color: var(--dot-color-default);
             border-radius: 50%;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-            transform: translate3d(-50%, -50%, 0);
-            /* Center the dot on its coordinates */
+            /* box-shadow removed for sharpness, centering done in JS for pixel-perfect positioning */
+            /* Hardware acceleration hints */
             will-change: transform;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            /* Additional ghosting reduction */
+            transform-style: preserve-3d;
+            contain: strict;
+            transition: none !important;
         }
 
         /* REST MSG */
@@ -1425,13 +1430,17 @@
                 x = cx + A * Math.sin(t);
                 y = cy + (A * 0.5) * Math.sin(2 * t);
             }
-            ui.dot.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+            // Single translate3d with integer pixels to avoid subpixel ghosting
+            const finalX = x - dotR;
+            const finalY = y - dotR;
+            ui.dot.style.transform = `translate3d(${finalX}px, ${finalY}px, 0)`;
         }
 
         function centerDot() {
-            const w = window.innerWidth / 2;
-            const h = window.innerHeight / 2;
-            ui.dot.style.transform = `translate3d(${w}px, ${h}px, 0) translate(-50%, -50%)`;
+            const dotR = state.settings.dotSize / 2;
+            const x = (window.innerWidth / 2) - dotR;
+            const y = (window.innerHeight / 2) - dotR;
+            ui.dot.style.transform = `translate3d(${x}px, ${y}px, 0)`;
         }
 
         function onResize() {
