@@ -46,6 +46,14 @@ It is a self-help tool for visual stimulation. It replaces neither professional 
 
 **Trademark Notice**: *EMDR* is a registered trademark of the **E.M.D.R. Institute, Inc.** This tool is a visual aid for bilateral stimulation and is not an official "EMDR" product.
 
+## 🤝 Community & Support
+
+- **Found a bug?** [Open an Issue](https://github.com/Smithbox-ai/bilateral-stimulation-lightbar/issues)
+- **Have an idea?** [Start a Discussion](https://github.com/Smithbox-ai/bilateral-stimulation-lightbar/discussions)
+- **Want to contribute?** Check out our [Contribution Guidelines](CONTRIBUTING.md).
+
+> 💡 **If this project helped you, please consider giving it a Star (⭐) on GitHub!** It helps others find this tool.
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
