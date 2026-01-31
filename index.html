@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Standalone bilateral stimulation tool (EMDR-like) for focus and relaxation.">
+    <title>Bilateral Stimulation Tool</title>
+    <style>
+        /* 
+         * DESIGN SYSTEM & THEME 
+         * "Luxury" Dark Mode Aesthetics
+         */
+        :root {
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --accent-color: rgba(255, 255, 255, 0.1);
+            --glass-bg: rgba(20, 20, 20, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --shadow-soft: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            --font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, sans-serif;
+            --dot-color-default: #ffffff;
+            --transition-speed: 0.3s;
+        }
+
+        /* RESET & BASE */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body,
+        html {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+            overflow: hidden;
+            /* Prevent scrolling during animation */
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        /* 
+         * LAYOUT LAYERS 
+         * 1. Canvas Layer (Animation)
+         * 2. UI Layer (Controls, Overlay)
+         * 3. Modal Layer (Settings, Disclaimer)
+         */
+        #app {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ANIMATION AREA */
+        #animation-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .dot {
+            position: absolute;
+            background-color: var(--dot-color-default);
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+            transform: translate3d(-50%, -50%, 0);
+            /* Center the dot on its coordinates */
+            will-change: transform;
+        }
+
+        /* REST MSG */
+        #rest-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #ffffff;
+            /* Default rest bg */
+            color: #000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #rest-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #rest-text {
+            font-size: clamp(1.5rem, 4vw, 3rem);
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            max-width: 800px;
+        }
+
+        #rest-timer-display {
+            position: absolute;
+            bottom: 150px;
+            font-size: 1.2rem;
+            opacity: 0.6;
+        }
+
+        /* UI CONTROLS - BOTTOM BAR */
+        #controls-bar {
+            position: absolute;
+            bottom: 40px;
+            z-index: 10;
+            display: flex;
+            gap: 16px;
+            padding: 12px 24px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 40px;
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s;
+        }
+
+        #controls-bar.hidden {
+            transform: translateY(150%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .btn-icon {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn-icon:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-icon:active {
+            transform: scale(0.95);
+        }
+
+        .btn-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        /* Secondary Controls */
+        .btn-secondary svg {
+            width: 20px;
+            height: 20px;
+            opacity: 0.8;
+        }
+
+        .btn-primary {
+            background-color: #fff;
+            color: #000;
+            width: 44px;
+            height: 44px;
+        }
+
+        .btn-primary:hover {
+            background-color: #eee;
+        }
+
+        /* SETTINGS PANEL (OFF-CANVAS) */
+        #settings-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        #settings-backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #settings-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            max-width: 360px;
+            background: #111;
+            z-index: 100;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-left: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        #settings-panel.open {
+            transform: translateX(0);
+        }
+
+        .settings-header {
+            padding: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .settings-header h2 {
+            font-size: 1.25rem;
+            font-weight: 500;
+        }
+
+        .settings-content {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .form-sub-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        /* Custom Inputs */
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            background: transparent;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+        }
+
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 100%;
+            height: 40px;
+            background: none;
+            cursor: pointer;
+        }
+
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        input[type="color"]::-webkit-color-swatch {
+            border: 1px solid #333;
+            border-radius: 8px;
+        }
+
+        select,
+        input[type="text"],
+        input[type="url"] {
+            width: 100%;
+            padding: 12px;
+            background: #222;
+            color: #fff;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        select:focus,
+        input[type="text"]:focus,
+        input[type="url"]:focus {
+            border-color: #666;
+        }
+
+        /* Audio Tabs */
+        .audio-source-switch {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .radio-btn {
+            flex: 1;
+            padding: 10px;
+            background: #222;
+            border: 1px solid #333;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .radio-btn.active {
+            background: #fff;
+            color: #000;
+            border-color: #fff;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .file-status {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 8px;
+            line-height: 1.4;
+            word-break: break-all;
+        }
+
+        .file-status.success {
+            color: #4cd964;
+        }
+
+        .file-status.warn {
+            color: #ffcc00;
+        }
+
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .val-display {
+            font-size: 0.9rem;
+            color: #888;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .btn-text {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .btn-text:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-text.primary {
+            background: #fff;
+            color: #000;
+        }
+
+        .btn-text.primary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-text.danger {
+            background: rgba(255, 59, 48, 0.2);
+            color: #ff3b30;
+        }
+
+        .btn-text.danger:hover {
+            background: rgba(255, 59, 48, 0.3);
+        }
+
+        /* DISCLAIMER MODAL */
+        #disclaimer-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 200;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-card {
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 16px;
+            max-width: 500px;
+            text-align: center;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-card h1 {
+            margin-bottom: 16px;
+        }
+
+        .modal-card p {
+            margin-bottom: 24px;
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .btn-full {
+            width: 100%;
+            padding: 14px;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-full:hover {
+            background: #e0e0e0;
+        }
+
+        /* RTL support for Arabic */
+        body.rtl {
+            direction: rtl;
+        }
+
+        body.rtl #controls-bar {
+            flex-direction: row-reverse;
+        }
+
+        body.rtl #settings-panel {
+            right: auto;
+            left: 0;
+            transform: translateX(-100%);
+            border-left: none;
+            border-right: 1px solid var(--glass-border);
+        }
+
+        body.rtl #settings-panel.open {
+            transform: translateX(0);
+        }
+
+        /* Fix slider direction in RTL if needed, but usually LTR is fine for numbers */
+    </style>
+</head>
+
+<body>
+
+    <!-- DISCLAIMER -->
+    <div id="disclaimer-modal">
+        <div class="modal-card">
+            <h1>⚠️ Important Disclaimer</h1>
+            <div id="disclaimer-text">
+                This application is a visual tool for bilateral stimulation and is NOT a medical device.
+                <br><br>
+                <b>Independent open-source tool. Not affiliated with EMDR Institute.</b><br>
+                EMDR is a registered trademark of E.M.D.R. Institute, Inc.
+                <br><br>
+                If you suffer from <b>PTSD, dissociation, panic attacks, epilepsy, or photosensitivity</b>,
+                please consult a specialist before using this tool.
+            </div>
+            <br>
+            <button class="btn-full" id="btn-accept">I Understand</button>
+        </div>
+    </div>
+
+    <!-- AUDIO ENGINE -->
+    <audio id="bg-music" loop></audio>
+
+    <!-- MAIN APP -->
+    <div id="app">
+        <!-- REST LAYER -->
+        <div id="rest-overlay">
+            <div id="rest-content">
+                <div id="rest-text">Shift your attention</div>
+                <!-- <div id="rest-timer-display"></div> Optional timer -->
+            </div>
+        </div>
+
+        <!-- ANIMATION LAYER -->
+        <div id="animation-container">
+            <div class="dot" id="dot"></div>
+        </div>
+
+        <!-- CONTROLS -->
+        <div id="controls-bar">
+            <!-- Settings -->
+            <button class="btn-icon" id="btn-settings" title="Settings">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.96l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.26-1.13.58-1.64.96l-2.39-.96a.488.488 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.96l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.26 1.13-.58 1.64-.96l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                </svg>
+            </button>
+
+            <!-- Stop -->
+            <button class="btn-icon" id="btn-stop" title="Stop">
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 6h12v12H6z" />
+                </svg>
+            </button> <!-- Skip Prev -->
+            <button class="btn-icon btn-secondary" id="btn-prev" title="Previous">
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                </svg>
+            </button>
+
+            <!-- Play/Pause -->
+            <button class="btn-icon btn-primary" id="btn-toggle" title="Start/Pause">
+                <!-- Play Icon -->
+                <svg id="icon-play" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                </svg>
+                <!-- Pause Icon (hidden by default) -->
+                <svg id="icon-pause" viewBox="0 0 24 24" style="display:none">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                </svg>
+            </button>
+
+            <!-- Skip Next -->
+            <button class="btn-icon btn-secondary" id="btn-next" title="Next">
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                </svg>
+            </button>
+
+            <!-- Fullscreen -->
+            <button class="btn-icon" id="btn-fullscreen" title="Fullscreen">
+                <svg viewBox="0 0 24 24">
+                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div id="settings-backdrop"></div>
+    <div id="settings-panel">
+        <div class="settings-header">
+            <h2 id="lbl-settings">Settings</h2>
+            <button class="btn-icon" id="btn-close-settings">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+            </button>
+        </div>
+        <div class="settings-content">
+
+            <!-- Language -->
+            <div class="form-group">
+                <label class="form-label" id="lbl-lang">Language</label>
+                <select id="inp-lang">
+                    <option value="auto">Auto (System)</option>
+                    <option value="en">English (EN)</option>
+                    <option value="ru">Русский (RU)</option>
+                    <option value="es">Español (ES)</option>
+                    <option value="fr">Français (FR)</option>
+                    <option value="zh">中文 (ZH)</option>
+                    <option value="ar">العربية (AR)</option>
+                </select>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+
+            <!-- AUDIO SECTION V5 -->
+            <div class="form-group">
+                <label class="form-label" id="lbl-audio">Background Music</label>
+
+                <!-- Source Toggle -->
+                <div class="audio-source-switch">
+                    <div class="radio-btn active" id="tab-file">Local File</div>
+                    <div class="radio-btn" id="tab-url">Web URL</div>
+                </div>
+
+                <!-- Tab: Local File -->
+                <div id="panel-file" class="tab-content active">
+                    <button class="btn-text primary" id="btn-pick-file">📂 Select File from Device</button>
+                    <!-- Hidden fallback for browsers without File System APIs -->
+                    <input type="file" id="fallback-input" accept="audio/*,video/*" style="display:none">
+
+                    <div id="file-restore-area" style="display:none; margin-top:10px;">
+                        <div class="file-status warn" id="msg-perm-need">Permission needed to reload file.</div>
+                        <button class="btn-text" id="btn-restore-perm">🔓 Access Saved File</button>
+                    </div>
+                    <div id="audio-file-status" class="file-status"></div>
+                </div>
+
+                <!-- Tab: URL -->
+                <div id="panel-url" class="tab-content">
+                    <input type="url" id="inp-audio-url" placeholder="https://example.com/music.mp3">
+                    <div class="file-status" id="lbl-url-hint">Enter direct link to audio file.</div>
+                </div>
+            </div>
+
+            <!-- Audio Volume -->
+            <div class="form-group" id="group-volume">
+                <div class="form-row">
+                    <label class="form-label" id="lbl-volume">Volume</label>
+                    <span class="val-display" id="val-volume">50%</span>
+                </div>
+                <input type="range" id="inp-volume" min="0" max="100" value="50">
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+
+            <!-- Repetitions (per cycle type) -->
+            <div class="form-group">
+                <div class="form-row">
+                    <label class="form-label" id="lbl-repetitions">Repetitions (per type)</label>
+                    <span class="val-display" id="val-repetitions">15</span>
+                </div>
+                <input type="range" id="inp-repetitions" min="5" max="50" value="15">
+            </div>
+
+            <!-- Speed Slider (1-10) -->
+            <div class="form-group">
+                <div class="form-row">
+                    <label class="form-label" id="lbl-speed">Speed</label>
+                    <span class="val-display" id="val-speed">5</span>
+                </div>
+                <!-- 1=Very Slow (5s), 10=Fast (0.5s) -->
+                <input type="range" id="inp-speed" min="1" max="10" step="1" value="5">
+            </div>
+
+            <!-- Rest Duration -->
+            <div class="form-group">
+                <div class="form-row">
+                    <label class="form-label" id="lbl-rest">Rest Duration (s)</label>
+                    <span class="val-display" id="val-rest">15s</span>
+                </div>
+                <input type="range" id="inp-rest" min="3" max="60" value="15">
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+
+            <!-- Dot Size -->
+            <div class="form-group">
+                <div class="form-row">
+                    <label class="form-label" id="lbl-dot-size">Dot Size</label>
+                    <span class="val-display" id="val-dot-size">30px</span>
+                </div>
+                <input type="range" id="inp-dot-size" min="10" max="100" value="30">
+            </div>
+
+            <!-- Colors -->
+            <div class="form-group">
+                <label class="form-label" id="lbl-dot-color">Dot Color</label>
+                <input type="color" id="inp-dot-color" value="#ffffff">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" id="lbl-bg-color">Background Color</label>
+                <input type="color" id="inp-bg-color" value="#000000">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" id="lbl-rest-bg">Rest Background</label>
+                <input type="color" id="inp-rest-bg" value="#ffffff">
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+
+            <div class="form-group"
+                style="margin-bottom: 20px; font-size: 0.75rem; color: #555; line-height: 1.4; text-align: center;">
+                <p id="lbl-about-text">
+                    Independent open-source tool. Not affiliated with EMDR Institute.<br>
+                    EMDR is a registered trademark of E.M.D.R. Institute, Inc.
+                </p>
+            </div>
+
+            <button class="btn-text danger" id="btn-reset">Reset Settings</button>
+        </div>
+    </div>
+
+    <script>
+        /* 
+         * APP LOGIC
+         * - Sequential Playback: Horizontal -> Infinity -> Circle
+         * - Supports Pause in both Motion and Rest
+         * - Multi-language (UN Standards)
+         * - Audio Persistence V5 (IndexedDB + URL)
+         * - Granular Navigation
+         */
+
+        /** IDB HELPER FOR FILE HANDLES */
+        const DB_NAME = 'EmdrAudioDB';
+        const STORE_NAME = 'handles';
+        const KEY_HANDLE = 'audio_file_handle';
+
+        const idb = {
+            open: () => {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(DB_NAME, 1);
+                    req.onupgradeneeded = (e) => {
+                        e.target.result.createObjectStore(STORE_NAME);
+                    };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            },
+            set: async (key, val) => {
+                const db = await idb.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    tx.objectStore(STORE_NAME).put(val, key);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            },
+            get: async (key) => {
+                const db = await idb.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const req = tx.objectStore(STORE_NAME).get(key);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+        };
+
+        /** LOCALIZATION CONSTANTS (UN Languages) */
+        const STRINGS = {
+            en: {
+                disclaimer: "This tool is for visual bilateral stimulation and is NOT a medical device.\n\nIndependent open-source tool. Not affiliated with EMDR Institute.\nEMDR is a registered trademark of E.M.D.R. Institute, Inc.\n\nConsult a specialist if you have PTSD, epilepsy, or photosensitivity.",
+                lblAboutText: "Independent open-source tool (Shapiro method). Not affiliated with EMDR Institute.<br>EMDR is a registered trademark of E.M.D.R. Institute, Inc.",
+                btnAccept: "I Understand",
+                restText: "Shift your attention (e.g., look around)",
+                lblSettings: "Settings",
+                lblLang: "Language",
+                lblAudio: "Background Music",
+                lblVolume: "Volume",
+                tabFile: "Local File",
+                tabUrl: "Web URL",
+                btnPickFile: "📂 Select File from Device",
+                btnRestorePerm: "🔓 Access Saved File",
+                msgPermNeed: "Permission needed to reload file.",
+                msgAudioSelected: "File selected:",
+                msgAudioError: "Error: Cannot play.",
+                lblRepetitions: "Repetitions (per type)",
+                lblSpeed: "Speed",
+                lblRest: "Rest Duration (s)",
+                lblDotSize: "Dot Size",
+                lblDotColor: "Dot Color",
+                lblBgColor: "Background Color",
+                lblRestBg: "Rest Background",
+                btnReset: "Reset to Defaults"
+            },
+            ru: {
+                disclaimer: "Это приложение — инструмент визуальной стимуляции, НЕ является медицинским изделием.\n\nНезависимый open-source проект. Не связан с EMDR Institute.\nEMDR является зарегистрированным товарным знаком E.M.D.R. Institute, Inc.\n\nПроконсультируйтесь с врачом при эпилепсии, ПТСР или фоточувствительности.",
+                lblAboutText: "Независимый open-source инструмент (метод Шапиро). Не связан с EMDR Institute.<br>EMDR — зарегистрированный знак E.M.D.R. Institute, Inc.",
+                btnAccept: "Я понимаю",
+                restText: "Переключите свое внимание (например, посмотрите по сторонам)",
+                lblSettings: "Настройки",
+                lblLang: "Язык (Language)",
+                lblAudio: "Фоновая музыка",
+                lblVolume: "Громкость",
+                tabFile: "Локальный файл",
+                tabUrl: "Web-ссылка",
+                btnPickFile: "📂 Выбрать файл с устройства",
+                btnRestorePerm: "🔓 Восстановить доступ к файлу",
+                msgPermNeed: "Нужно разрешение на открытие файла.",
+                msgAudioSelected: "Играет:",
+                msgAudioError: "Ошибка: не играет.",
+                lblRepetitions: "Повторений (в каждом типе)",
+                lblSpeed: "Скорость",
+                lblRest: "Время отдыха (с)",
+                lblDotSize: "Размер точки",
+                lblDotColor: "Цвет точки",
+                lblBgColor: "Цвет фона",
+                lblRestBg: "Фон отдыха",
+                btnReset: "Сбросить настройки"
+            },
+            es: {
+                disclaimer: "Esta herramienta es para estimulación bilateral visual y NO es un dispositivo médico. No sustituye la terapia.\n\nConsulte a un especialista si tiene TEPT, epilepsia o fotosensibilidad.",
+                btnAccept: "Entiendo",
+                restText: "Cambia tu atención (por ejemplo, mira a tu alrededor)",
+                lblSettings: "Ajustes",
+                lblLang: "Idioma",
+                lblAudio: "Música de fondo",
+                lblVolume: "Volumen",
+                tabFile: "Archivo Local",
+                tabUrl: "Enlace Web",
+                btnPickFile: "📂 Seleccionar archivo",
+                btnRestorePerm: "🔓 Restaurar acceso",
+                msgPermNeed: "Se necesita permiso para recargar.",
+                msgAudioSelected: "Archivo:",
+                msgAudioError: "Error al reproducir.",
+                lblRepetitions: "Repeticiones (por tipo)",
+                lblSpeed: "Velocidad",
+                lblRest: "Duración del descanso (s)",
+                lblDotSize: "Tamaño del punto",
+                lblDotColor: "Color del punto",
+                lblBgColor: "Color de fondo",
+                lblRestBg: "Fondo de descanso",
+                btnReset: "Restablecer valores"
+            },
+            fr: {
+                disclaimer: "Cet outil est destiné à la stimulation bilatérale visuelle et n'est PAS un dispositif médical.",
+                btnAccept: "Je comprends",
+                restText: "Déplacez votre attention",
+                lblSettings: "Paramètres",
+                lblLang: "Langue",
+                lblAudio: "Musique de fond",
+                lblVolume: "Volume",
+                tabFile: "Fichier Local",
+                tabUrl: "Lien Web",
+                btnPickFile: "📂 Choisir un fichier",
+                btnRestorePerm: "🔓 Restaurer l'accès",
+                msgPermNeed: "Permission requise.",
+                msgAudioSelected: "Fichier:",
+                msgAudioError: "Erreur de lecture.",
+                lblRepetitions: "Répétitions",
+                lblSpeed: "Vitesse",
+                lblRest: "Durée de repos (s)",
+                lblDotSize: "Taille du point",
+                lblDotColor: "Couleur du point",
+                lblBgColor: "Couleur de fond",
+                lblRestBg: "Fond de repos",
+                btnReset: "Réinitialiser"
+            },
+            zh: {
+                disclaimer: "此工具用于视觉双边刺激，并非医疗设备。",
+                btnAccept: "我明白",
+                restText: "转移您的注意力",
+                lblSettings: "设置",
+                lblLang: "语言",
+                lblAudio: "背景音乐",
+                lblVolume: "音量",
+                tabFile: "本地文件",
+                tabUrl: "网络链接",
+                btnPickFile: "📂 选择文件",
+                btnRestorePerm: "🔓 恢复访问",
+                msgPermNeed: "需要权限重新加载。",
+                msgAudioSelected: "已选:",
+                msgAudioError: "播放错误。",
+                lblRepetitions: "重复次数",
+                lblSpeed: "速度",
+                lblRest: "休息时间 (秒)",
+                lblDotSize: "点大小",
+                lblDotColor: "点颜色",
+                lblBgColor: "背景颜色",
+                lblRestBg: "休息背景",
+                btnReset: "重置设置"
+            },
+            ar: {
+                disclaimer: "هذه الأداة للتحفيز الثنائي البصري وليست جهازاً طبياً.",
+                btnAccept: "أنا أفهم",
+                restText: "حول انتباهك",
+                lblSettings: "الإعدادات",
+                lblLang: "اللغة",
+                lblAudio: "موسيقى الخلفية",
+                lblVolume: "حجم الصوت",
+                tabFile: "ملف محلي",
+                tabUrl: "رابط ويب",
+                btnPickFile: "📂 اختر ملف",
+                btnRestorePerm: "🔓 استعادة الوصول",
+                msgPermNeed: "الإذن مطلوب.",
+                msgAudioSelected: "ملف:",
+                msgAudioError: "خطأ في التشغيل.",
+                lblRepetitions: "تكرار",
+                lblSpeed: "سرعة",
+                lblRest: "مدة الراحة (ث)",
+                lblDotSize: "حجم النقطة",
+                lblDotColor: "لون النقطة",
+                lblBgColor: "لون الخلفية",
+                lblRestBg: "خلفية الراحة",
+                btnReset: "إعادة ضبط",
+                rtl: true
+            }
+        };
+
+        /** STATE MANAGEMENT */
+        const DEFAULT_SETTINGS = {
+            lang: 'auto',
+            repetitions: 15,
+            speedLevel: 5, // 1-10 slider
+            restDuration: 15, // seconds
+            dotSize: 30, // px
+            dotColor: '#ffffff',
+            bgColor: '#000000',
+            restBgColor: '#ffffff',
+            audioSourceType: 'file', // 'file' or 'url'
+            audioUrl: '', // saved URL
+        };
+
+        const STORAGE_KEY = 'emdr_app_settings_v5';
+
+        let state = {
+            settings: { ...DEFAULT_SETTINGS },
+            status: 'IDLE',
+            sequence: ['horizontal', 'infinity', 'circle'],
+            currentStageIndex: 0,
+
+            startTime: 0,
+            elapsedPaused: 0,
+            pausedAt: 0,
+            restRemainingMs: 0,
+            lastRestTick: 0,
+            resolvedLang: 'en',
+
+            // Audio Runtime
+            audioFileHandle: null,
+            audioBlobUrl: null
+        };
+
+        let rAF = null;
+
+        /** DOM ELEMENTS */
+        const ui = {
+            dot: document.getElementById('dot'),
+            app: document.getElementById('app'),
+            audio: document.getElementById('bg-music'),
+            restOverlay: document.getElementById('rest-overlay'),
+            restText: document.getElementById('rest-text'),
+            controls: document.getElementById('controls-bar'),
+            settingsPanel: document.getElementById('settings-panel'),
+            settingsBackdrop: document.getElementById('settings-backdrop'),
+            iconPlay: document.getElementById('icon-play'),
+            iconPause: document.getElementById('icon-pause'),
+            inputs: {
+                lang: document.getElementById('inp-lang'),
+                audioUrl: document.getElementById('inp-audio-url'),
+                volume: document.getElementById('inp-volume'),
+                repetitions: document.getElementById('inp-repetitions'),
+                speed: document.getElementById('inp-speed'),
+                rest: document.getElementById('inp-rest'),
+                dotSize: document.getElementById('inp-dot-size'),
+                dotColor: document.getElementById('inp-dot-color'),
+                bgColor: document.getElementById('inp-bg-color'),
+                restBg: document.getElementById('inp-rest-bg')
+            },
+            audioTabs: {
+                tabFile: document.getElementById('tab-file'),
+                tabUrl: document.getElementById('tab-url'),
+                panelFile: document.getElementById('panel-file'),
+                panelUrl: document.getElementById('panel-url'),
+                btnPick: document.getElementById('btn-pick-file'),
+                // Fallback input
+                inpFallback: document.getElementById('fallback-input'),
+                btnRestore: document.getElementById('btn-restore-perm'),
+                areaRestore: document.getElementById('file-restore-area'),
+                status: document.getElementById('audio-file-status')
+            },
+            displays: {
+                volume: document.getElementById('val-volume'),
+                repetitions: document.getElementById('val-repetitions'),
+                speed: document.getElementById('val-speed'),
+                rest: document.getElementById('val-rest'),
+                dotSize: document.getElementById('val-dot-size')
+            }
+        };
+
+        function getCycleDuration(level) {
+            const d = 5.5 - (level * 0.5);
+            return Math.max(0.2, d);
+        }
+
+        async function init() {
+            // Load LocalSettings
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    state.settings = { ...DEFAULT_SETTINGS, ...parsed };
+                }
+            } catch (e) {
+                console.warn('Failed to load settings', e);
+            }
+
+            resolveLanguage();
+            bindSettingsUI();
+            applyVisualSettings();
+            applyLocalization();
+
+            // Init Audio
+            ui.audio.volume = ui.inputs.volume.value / 100;
+            switchAudioTab(state.settings.audioSourceType);
+
+            // Attempt to restore audio
+            if (state.settings.audioSourceType === 'url' && state.settings.audioUrl) {
+                ui.audio.src = state.settings.audioUrl;
+            } else if (state.settings.audioSourceType === 'file') {
+                await tryRestoreFileHandle();
+            }
+
+            document.getElementById('btn-accept').addEventListener('click', () => {
+                document.getElementById('disclaimer-modal').style.display = 'none';
+            });
+
+            setupEventListeners();
+            window.addEventListener('resize', onResize);
+            centerDot();
+        }
+
+        /** AUDIO PERSISTENCE LOGIC */
+        async function pickLocalFile() {
+            try {
+                // FEATURE DETECTION
+                // If browser supports API, us it. If not, fallback to standard input.
+                if (!window.showOpenFilePicker) {
+                    // Fallback logic
+                    ui.audioTabs.inpFallback.click();
+                    return;
+                }
+
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{ description: 'Audio Files', accept: { 'audio/*': ['.mp3', '.wav', '.ogg', '.m4a'], 'video/*': ['.mp4', '.webm'] } }]
+                });
+
+                if (handle) {
+                    state.audioFileHandle = handle;
+                    await idb.set(KEY_HANDLE, handle); // Persist handle
+                    await loadFileFromHandle(handle);
+                }
+            } catch (e) {
+                // User cancelled or error
+                console.log(e);
+            }
+        }
+
+        // Fallback loader
+        function loadAudioFallback(file) {
+            if (!file) return;
+            if (state.audioBlobUrl) URL.revokeObjectURL(state.audioBlobUrl);
+            state.audioBlobUrl = URL.createObjectURL(file);
+            ui.audio.src = state.audioBlobUrl;
+
+            // Clear persistent handle since we are using fallback
+            state.audioFileHandle = null;
+            idb.set(KEY_HANDLE, null);
+
+            const txt = STRINGS[state.resolvedLang] || STRINGS['en'];
+            updateFileStatus(`${txt.msgAudioSelected} ${file.name}`);
+        }
+
+        async function tryRestoreFileHandle() {
+            try {
+                // If feature not supported, we can't restore
+                if (!window.showOpenFilePicker) return;
+
+                const handle = await idb.get(KEY_HANDLE);
+                if (!handle) return;
+
+                state.audioFileHandle = handle;
+
+                // Check permission
+                try {
+                    const opts = { mode: 'read' };
+                    if ((await handle.queryPermission(opts)) === 'granted') {
+                        await loadFileFromHandle(handle);
+                    } else {
+                        // Need UI to request
+                        showRestoreUI(true);
+                        updateFileStatus(handle.name + ' (Saved)');
+                    }
+                } catch (err) {
+                    console.log("Handle expired or not supported", err);
+                }
+
+            } catch (e) {
+                console.warn('IDB Error', e);
+            }
+        }
+
+        async function requestRestorePermission() {
+            if (!state.audioFileHandle) return;
+            // Must be user gesture
+            if ((await state.audioFileHandle.requestPermission({ mode: 'read' })) === 'granted') {
+                showRestoreUI(false);
+                await loadFileFromHandle(state.audioFileHandle);
+            }
+        }
+
+        async function loadFileFromHandle(handle) {
+            const file = await handle.getFile();
+            if (state.audioBlobUrl) URL.revokeObjectURL(state.audioBlobUrl);
+            state.audioBlobUrl = URL.createObjectURL(file);
+            ui.audio.src = state.audioBlobUrl;
+
+            const txt = STRINGS[state.resolvedLang] || STRINGS['en'];
+            updateFileStatus(`${txt.msgAudioSelected} ${file.name}`);
+        }
+
+        function showRestoreUI(show) {
+            ui.audioTabs.areaRestore.style.display = show ? 'block' : 'none';
+            ui.audioTabs.btnPick.style.display = show ? 'none' : 'block';
+        }
+
+        function updateFileStatus(msg) {
+            ui.audioTabs.status.innerText = msg;
+        }
+
+        function switchAudioTab(type) {
+            state.settings.audioSourceType = type;
+            saveSettings();
+
+            if (type === 'file') {
+                ui.audioTabs.tabFile.classList.add('active');
+                ui.audioTabs.tabUrl.classList.remove('active');
+                ui.audioTabs.panelFile.classList.add('active');
+                ui.audioTabs.panelUrl.classList.remove('active');
+
+                // If we switched to file, use file src if available
+                if (state.audioBlobUrl) ui.audio.src = state.audioBlobUrl;
+                else tryRestoreFileHandle(); // Check if we have one saved
+
+            } else {
+                ui.audioTabs.tabFile.classList.remove('active');
+                ui.audioTabs.tabUrl.classList.add('active');
+                ui.audioTabs.panelFile.classList.remove('active');
+                ui.audioTabs.panelUrl.classList.add('active');
+
+                // If switched to url, use url src
+                if (state.settings.audioUrl) ui.audio.src = state.settings.audioUrl;
+            }
+        }
+
+        /** SETTINGS & UI BINDING */
+        function resolveLanguage() {
+            if (state.settings.lang !== 'auto') {
+                state.resolvedLang = state.settings.lang;
+            } else {
+                const userLangs = navigator.languages || [navigator.language || 'en'];
+                const found = userLangs.map(l => l.split('-')[0].toLowerCase()).find(l => STRINGS[l]);
+                state.resolvedLang = found || 'en';
+            }
+            if (STRINGS[state.resolvedLang]?.rtl) document.body.classList.add('rtl');
+            else document.body.classList.remove('rtl');
+        }
+
+        function applyLocalization() {
+            const txt = STRINGS[state.resolvedLang] || STRINGS['en'];
+            document.getElementById('disclaimer-text').innerHTML = txt.disclaimer.replace(/\n/g, '<br>');
+            document.getElementById('btn-accept').innerText = txt.btnAccept;
+            document.getElementById('rest-text').innerText = txt.restText;
+            document.getElementById('lbl-settings').innerText = txt.lblSettings;
+            document.getElementById('lbl-lang').innerText = txt.lblLang;
+
+            document.getElementById('lbl-audio').innerText = txt.lblAudio;
+            document.getElementById('lbl-volume').innerText = txt.lblVolume;
+            ui.audioTabs.tabFile.innerText = txt.tabFile;
+            ui.audioTabs.tabUrl.innerText = txt.tabUrl;
+            ui.audioTabs.btnPick.innerText = txt.btnPickFile;
+            ui.audioTabs.btnRestore.innerText = txt.btnRestorePerm;
+            document.getElementById('msg-perm-need').innerText = txt.msgPermNeed;
+
+            document.getElementById('lbl-repetitions').innerText = txt.lblRepetitions;
+            document.getElementById('lbl-speed').innerText = txt.lblSpeed;
+            document.getElementById('lbl-rest').innerText = txt.lblRest;
+            document.getElementById('lbl-dot-size').innerText = txt.lblDotSize;
+            document.getElementById('lbl-dot-color').innerText = txt.lblDotColor;
+            document.getElementById('lbl-bg-color').innerText = txt.lblBgColor;
+            document.getElementById('lbl-rest-bg').innerText = txt.lblRestBg;
+            document.getElementById('btn-reset').innerText = txt.btnReset;
+            if (txt.lblAboutText) {
+                document.getElementById('lbl-about-text').innerHTML = txt.lblAboutText;
+            }
+        }
+
+        function bindSettingsUI() {
+            const s = state.settings;
+            ui.inputs.lang.value = s.lang;
+            ui.inputs.repetitions.value = s.repetitions;
+            ui.displays.repetitions.innerText = s.repetitions;
+            ui.inputs.speed.value = s.speedLevel;
+            ui.displays.speed.innerText = s.speedLevel;
+            ui.inputs.rest.value = s.restDuration;
+            ui.displays.rest.innerText = s.restDuration + 's';
+            ui.inputs.dotSize.value = s.dotSize;
+            ui.displays.dotSize.innerText = s.dotSize + 'px';
+            ui.inputs.dotColor.value = s.dotColor;
+            ui.inputs.bgColor.value = s.bgColor;
+            ui.inputs.restBg.value = s.restBgColor;
+            ui.inputs.audioUrl.value = s.audioUrl;
+        }
+
+        function saveSettings() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
+            } catch (e) { }
+        }
+
+        function resetSettings() {
+            state.settings = { ...DEFAULT_SETTINGS };
+            saveSettings();
+            bindSettingsUI();
+            applyVisualSettings();
+            resolveLanguage();
+            applyLocalization();
+            switchAudioTab('file');
+            if (state.status !== 'IDLE') stopAnimation();
+        }
+
+        let debounceTimer;
+        function updateSetting(key, value) {
+            state.settings[key] = value;
+            if (key === 'lang') {
+                resolveLanguage();
+                applyLocalization();
+            } else {
+                applyVisualSettings();
+            }
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(saveSettings, 300);
+        }
+
+        function applyVisualSettings() {
+            const s = state.settings;
+            document.documentElement.style.setProperty('--dot-color-default', s.dotColor);
+            document.documentElement.style.setProperty('--bg-color', s.bgColor);
+            ui.restOverlay.style.backgroundColor = s.restBgColor;
+            ui.dot.style.width = s.dotSize + 'px';
+            ui.dot.style.height = s.dotSize + 'px';
+            if (state.status === 'IDLE') centerDot();
+        }
+
+        /** ENGINE LOGIC */
+        function safePlayAudio() {
+            if (ui.audio.src) {
+                ui.audio.play().catch(e => {
+                    const txt = STRINGS[state.resolvedLang] || STRINGS['en'];
+                    updateFileStatus(txt.msgAudioError);
+                });
+            }
+        }
+
+        function togglePlayPause() {
+            if (state.status === 'RUNNING') {
+                state.status = 'PAUSED_RUN';
+                ui.audio.pause();
+                state.pausedAt = performance.now();
+                cancelAnimationFrame(rAF);
+                updateControls();
+                ui.controls.classList.remove('hidden');
+            } else if (state.status === 'RESTING') {
+                state.status = 'PAUSED_REST';
+                ui.audio.pause();
+                cancelAnimationFrame(rAF);
+                updateControls();
+                ui.controls.classList.remove('hidden');
+            } else if (state.status === 'PAUSED_RUN') {
+                const now = performance.now();
+                state.elapsedPaused += (now - state.pausedAt);
+                state.status = 'RUNNING';
+                safePlayAudio();
+                updateControls();
+                ui.controls.classList.add('hidden');
+                rAF = requestAnimationFrame(tickMotion);
+            } else if (state.status === 'PAUSED_REST') {
+                state.lastRestTick = performance.now();
+                state.status = 'RESTING';
+                safePlayAudio();
+                updateControls();
+                rAF = requestAnimationFrame(tickRest);
+            } else if (state.status === 'IDLE') {
+                startSequence();
+            }
+        }
+
+        function startSequence() {
+            if (state.status !== 'IDLE') return;
+            state.currentStageIndex = 0;
+            runMotionStage(0);
+        }
+
+        function stopAnimation() {
+            state.status = 'IDLE';
+            ui.audio.pause();
+            if (ui.audio.src) ui.audio.currentTime = 0;
+
+            cancelAnimationFrame(rAF);
+            ui.restOverlay.classList.remove('active');
+            centerDot();
+            updateControls();
+            ui.controls.classList.remove('hidden');
+        }
+
+        function navigateSequence(direction) {
+            if (state.status === 'IDLE') return;
+
+            let currentVirtualStep = state.currentStageIndex * 2;
+            if (state.status === 'RESTING' || state.status === 'PAUSED_REST') currentVirtualStep += 1;
+
+            let targetVirtualStep = currentVirtualStep + direction;
+            if (targetVirtualStep < 0) targetVirtualStep = 0;
+            const maxSteps = state.sequence.length * 2;
+            if (targetVirtualStep >= maxSteps) {
+                stopAnimation();
+                return;
+            }
+
+            const newStageIndex = Math.floor(targetVirtualStep / 2);
+            const isRest = (targetVirtualStep % 2 !== 0);
+
+            state.currentStageIndex = newStageIndex;
+            cancelAnimationFrame(rAF);
+            ui.restOverlay.classList.remove('active');
+
+            if (isRest) startRestStage();
+            else runMotionStage(newStageIndex);
+        }
+
+        function runMotionStage(index) {
+            state.status = 'RUNNING';
+            safePlayAudio();
+            state.completedCycles = 0;
+            state.elapsedPaused = 0;
+            state.startTime = performance.now();
+            updateControls();
+            ui.controls.classList.add('hidden');
+            rAF = requestAnimationFrame(tickMotion);
+        }
+
+        function tickMotion(timestamp) {
+            if (state.status !== 'RUNNING') return;
+            const activeTime = timestamp - state.startTime - state.elapsedPaused;
+            const cycleDur = getCycleDuration(state.settings.speedLevel) * 1000;
+            const totalProgress = activeTime / cycleDur;
+            const cyclePhase = (totalProgress % 1) * 2 * Math.PI;
+
+            if (Math.floor(totalProgress) >= state.settings.repetitions) {
+                startRestStage();
+                return;
+            }
+            updateDotPosition(cyclePhase, state.sequence[state.currentStageIndex]);
+            rAF = requestAnimationFrame(tickMotion);
+        }
+
+        function startRestStage() {
+            state.status = 'RESTING';
+            state.restRemainingMs = state.settings.restDuration * 1000;
+            state.lastRestTick = performance.now();
+            ui.restOverlay.classList.add('active');
+            ui.controls.classList.remove('hidden');
+            updateControls();
+            rAF = requestAnimationFrame(tickRest);
+        }
+
+        function tickRest(timestamp) {
+            if (state.status !== 'RESTING') return;
+            const delta = timestamp - state.lastRestTick;
+            state.lastRestTick = timestamp;
+            state.restRemainingMs -= delta;
+
+            if (state.restRemainingMs <= 0) {
+                ui.restOverlay.classList.remove('active');
+                state.currentStageIndex++;
+                if (state.currentStageIndex >= state.sequence.length) stopAnimation();
+                else runMotionStage(state.currentStageIndex);
+                return;
+            }
+            rAF = requestAnimationFrame(tickRest);
+        }
+
+        function updateDotPosition(t, mode) {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            const dotR = state.settings.dotSize / 2;
+            const margin = Math.max(dotR, 40);
+            const cx = w / 2;
+            const cy = h / 2;
+            let x, y;
+
+            if (mode === 'horizontal') {
+                const A = (w / 2) - margin;
+                x = cx + A * Math.sin(t);
+                y = cy;
+            } else if (mode === 'circle') {
+                const R = (Math.min(w, h) / 2) - margin;
+                x = cx + R * Math.cos(t);
+                y = cy + R * Math.sin(t);
+            } else if (mode === 'infinity') {
+                const maxW = w - 2 * margin;
+                const maxH = h - 2 * margin;
+                const A = Math.min(maxW / 2, maxH);
+                x = cx + A * Math.sin(t);
+                y = cy + (A * 0.5) * Math.sin(2 * t);
+            }
+            ui.dot.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+        }
+
+        function centerDot() {
+            const w = window.innerWidth / 2;
+            const h = window.innerHeight / 2;
+            ui.dot.style.transform = `translate3d(${w}px, ${h}px, 0) translate(-50%, -50%)`;
+        }
+
+        function onResize() {
+            if (state.status === 'IDLE') centerDot();
+        }
+
+        function updateControls() {
+            const isRunning = (state.status === 'RUNNING' || state.status === 'RESTING');
+            ui.iconPlay.style.display = isRunning ? 'none' : 'block';
+            ui.iconPause.style.display = isRunning ? 'block' : 'none';
+        }
+
+        function setupEventListeners() {
+            document.getElementById('btn-toggle').addEventListener('click', togglePlayPause);
+            document.getElementById('btn-stop').addEventListener('click', stopAnimation);
+            document.getElementById('btn-prev').addEventListener('click', () => navigateSequence(-1));
+            document.getElementById('btn-next').addEventListener('click', () => navigateSequence(1));
+
+            // Settings toggle
+            document.getElementById('btn-settings').addEventListener('click', () => {
+                ui.settingsPanel.classList.add('open');
+                ui.settingsBackdrop.classList.add('open');
+                if (state.status === 'RUNNING' || state.status === 'RESTING') togglePlayPause();
+            });
+            document.getElementById('btn-close-settings').addEventListener('click', () => {
+                ui.settingsPanel.classList.remove('open');
+                ui.settingsBackdrop.classList.remove('open');
+            });
+            ui.settingsBackdrop.addEventListener('click', () => {
+                ui.settingsPanel.classList.remove('open');
+                ui.settingsBackdrop.classList.remove('open');
+            });
+
+            document.getElementById('btn-fullscreen').addEventListener('click', () => {
+                if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { });
+                else document.exitFullscreen();
+            });
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                if (confirm('Reset all settings to default?')) resetSettings();
+            });
+
+            // Audio Events V5
+            ui.audioTabs.tabFile.addEventListener('click', () => switchAudioTab('file'));
+            ui.audioTabs.tabUrl.addEventListener('click', () => switchAudioTab('url'));
+
+            ui.audioTabs.btnPick.addEventListener('click', pickLocalFile);
+
+            // Fallback Listener
+            ui.audioTabs.inpFallback.addEventListener('change', (e) => {
+                loadAudioFallback(e.target.files[0]);
+            });
+
+            ui.audioTabs.btnRestore.addEventListener('click', requestRestorePermission);
+
+            ui.inputs.audioUrl.addEventListener('input', (e) => {
+                state.settings.audioUrl = e.target.value;
+                ui.audio.src = e.target.value;
+                debounceTimer = setTimeout(saveSettings, 300);
+            });
+
+            ui.inputs.volume.addEventListener('input', (e) => {
+                ui.displays.volume.innerText = e.target.value + '%';
+                ui.audio.volume = e.target.value / 100;
+            });
+
+            // Other Inputs
+            ui.inputs.lang.addEventListener('change', (e) => updateSetting('lang', e.target.value));
+            ui.inputs.repetitions.addEventListener('input', (e) => {
+                ui.displays.repetitions.innerText = e.target.value;
+                updateSetting('repetitions', parseInt(e.target.value));
+            });
+            ui.inputs.speed.addEventListener('input', (e) => {
+                ui.displays.speed.innerText = e.target.value;
+                updateSetting('speedLevel', parseInt(e.target.value));
+            });
+            ui.inputs.rest.addEventListener('input', (e) => {
+                ui.displays.rest.innerText = e.target.value + 's';
+                updateSetting('restDuration', parseInt(e.target.value));
+            });
+            ui.inputs.dotSize.addEventListener('input', (e) => {
+                ui.displays.dotSize.innerText = e.target.value + 'px';
+                updateSetting('dotSize', parseInt(e.target.value));
+            });
+            ui.inputs.dotColor.addEventListener('input', (e) => updateSetting('dotColor', e.target.value));
+            ui.inputs.bgColor.addEventListener('input', (e) => updateSetting('bgColor', e.target.value));
+            ui.inputs.restBg.addEventListener('input', (e) => updateSetting('restBgColor', e.target.value));
+
+            let mouseTimer;
+            document.addEventListener('mousemove', () => {
+                if (state.status === 'RUNNING' || state.status === 'RESTING') {
+                    ui.controls.classList.remove('hidden');
+                    clearTimeout(mouseTimer);
+                    mouseTimer = setTimeout(() => {
+                        if (state.status === 'RUNNING' || state.status === 'RESTING') ui.controls.classList.add('hidden');
+                    }, 2500);
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') { e.preventDefault(); togglePlayPause(); }
+                if (e.code === 'ArrowRight' && state.status !== 'IDLE') navigateSequence(1);
+                if (e.code === 'ArrowLeft' && state.status !== 'IDLE') navigateSequence(-1);
+                if (e.code === 'Escape') {
+                    ui.settingsPanel.classList.remove('open');
+                    ui.settingsBackdrop.classList.remove('open');
+                }
+            });
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
