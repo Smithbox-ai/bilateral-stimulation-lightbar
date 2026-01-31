@@ -26,7 +26,7 @@ A standalone, privacy-focused web application for **Visual Bilateral Stimulation
 Simply open the `index.html` file in any modern web browser. No server required.
 
 ### Online Demo
-[Link to your GitHub Pages will go here]
+[**Click here to run the tool**](https://smithbox-ai.github.io/bilateral-stimulation-lightbar/)
 
 ## ⚙️ Configuration
 
