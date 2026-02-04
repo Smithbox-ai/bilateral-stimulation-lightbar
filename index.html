@@ -71,19 +71,12 @@
             pointer-events: none;
         }
 
-        .dot {
+        #dot-canvas {
             position: absolute;
-            background-color: var(--dot-color-default);
-            border-radius: 50%;
-            /* box-shadow removed for sharpness, centering done in JS for pixel-perfect positioning */
-            /* Hardware acceleration hints */
-            will-change: transform;
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
-            /* Additional ghosting reduction */
-            transform-style: preserve-3d;
-            contain: strict;
-            transition: none !important;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
         }
 
         /* REST MSG */
@@ -533,7 +526,7 @@
 
         <!-- ANIMATION LAYER -->
         <div id="animation-container">
-            <div class="dot" id="dot"></div>
+            <canvas id="dot-canvas"></canvas>
         </div>
 
         <!-- CONTROLS -->
@@ -958,10 +951,12 @@
         };
 
         let rAF = null;
+        let canvasCtx = null;
+        let canvasDpr = 1;
 
         /** DOM ELEMENTS */
         const ui = {
-            dot: document.getElementById('dot'),
+            canvas: document.getElementById('dot-canvas'),
             app: document.getElementById('app'),
             audio: document.getElementById('bg-music'),
             restOverlay: document.getElementById('rest-overlay'),
@@ -1025,6 +1020,7 @@
             bindSettingsUI();
             applyVisualSettings();
             applyLocalization();
+            setupCanvas();
 
             // Init Audio
             ui.audio.volume = ui.inputs.volume.value / 100;
@@ -1044,6 +1040,46 @@
             setupEventListeners();
             window.addEventListener('resize', onResize);
             centerDot();
+        }
+
+        function setupCanvas() {
+            canvasCtx = ui.canvas.getContext('2d', { alpha: true });
+            resizeCanvas();
+        }
+
+        function resizeCanvas() {
+            if (!canvasCtx) return;
+            const rect = ui.canvas.getBoundingClientRect();
+            canvasDpr = window.devicePixelRatio || 1;
+            ui.canvas.width = Math.round(rect.width * canvasDpr);
+            ui.canvas.height = Math.round(rect.height * canvasDpr);
+            ui.canvas.style.width = rect.width + 'px';
+            ui.canvas.style.height = rect.height + 'px';
+            canvasCtx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
+            canvasCtx.imageSmoothingEnabled = true;
+        }
+
+        function clearCanvas() {
+            if (!canvasCtx) return;
+            canvasCtx.setTransform(1, 0, 0, 1, 0, 0);
+            canvasCtx.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
+            canvasCtx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
+        }
+
+        function snapToDevicePixel(value) {
+            return Math.round(value * canvasDpr) / canvasDpr;
+        }
+
+        function drawDot(cx, cy, radius) {
+            if (!canvasCtx) return;
+            clearCanvas();
+            const x = snapToDevicePixel(cx);
+            const y = snapToDevicePixel(cy);
+            const r = Math.max(0.5, snapToDevicePixel(radius));
+            canvasCtx.fillStyle = state.settings.dotColor;
+            canvasCtx.beginPath();
+            canvasCtx.arc(x, y, r, 0, Math.PI * 2);
+            canvasCtx.fill();
         }
 
         /** AUDIO PERSISTENCE LOGIC */
@@ -1263,8 +1299,6 @@
             document.documentElement.style.setProperty('--dot-color-default', s.dotColor);
             document.documentElement.style.setProperty('--bg-color', s.bgColor);
             ui.restOverlay.style.backgroundColor = s.restBgColor;
-            ui.dot.style.width = s.dotSize + 'px';
-            ui.dot.style.height = s.dotSize + 'px';
             if (state.status === 'IDLE') centerDot();
         }
 
@@ -1385,6 +1419,7 @@
             state.restRemainingMs = state.settings.restDuration * 1000;
             state.lastRestTick = performance.now();
             ui.restOverlay.classList.add('active');
+            clearCanvas();
             ui.controls.classList.remove('hidden');
             updateControls();
             rAF = requestAnimationFrame(tickRest);
@@ -1430,20 +1465,18 @@
                 x = cx + A * Math.sin(t);
                 y = cy + (A * 0.5) * Math.sin(2 * t);
             }
-            // Single translate3d with integer pixels to avoid subpixel ghosting
-            const finalX = x - dotR;
-            const finalY = y - dotR;
-            ui.dot.style.transform = `translate3d(${finalX}px, ${finalY}px, 0)`;
+            drawDot(x, y, dotR);
         }
 
         function centerDot() {
             const dotR = state.settings.dotSize / 2;
-            const x = (window.innerWidth / 2) - dotR;
-            const y = (window.innerHeight / 2) - dotR;
-            ui.dot.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+            const x = (window.innerWidth / 2);
+            const y = (window.innerHeight / 2);
+            drawDot(x, y, dotR);
         }
 
         function onResize() {
+            resizeCanvas();
             if (state.status === 'IDLE') centerDot();
         }
 
